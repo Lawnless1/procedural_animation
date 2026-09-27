@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <canvas id="plot" width="600" height="600"></canvas>
+    <script>
+    const canvas = document.getElementById('plot');
+    const ctx = canvas.getContext('2d');
+
+    const gridSize = 30;
+    const cellSize = canvas.width / gridSize;
+    const heights = Array(gridSize + 1).fill(0).map(() => Array(gridSize + 1).fill(0));
+    const velocities = Array(gridSize + 1).fill(0).map(() => Array(gridSize + 1).fill(0));
+    
+    const damping = 0.95;
+    const spread = 0.5;
+    let lastX = -1, lastY = -1;
+
+    canvas.addEventListener('mousemove', (e) => {
+        const x = Math.floor(e.offsetX / cellSize);
+        const y = Math.floor(e.offsetY / cellSize);
+        
+        if (x >= 0 && x <= gridSize && y >= 0 && y <= gridSize && (x !== lastX || y !== lastY)) {
+            heights[y][x] += 30;
+            lastX = x;
+            lastY = y;
+        }
+    });
+
+    function update() {
+        for (let y = 1; y < gridSize; y++) {
+            for (let x = 1; x < gridSize; x++) {
+                const avg = (heights[y-1][x] + heights[y+1][x] + heights[y][x-1] + heights[y][x+1]) / 4;
+                velocities[y][x] += (avg - heights[y][x]) * spread;
+            }
+        }
+        
+        for (let y = 1; y < gridSize; y++) {
+            for (let x = 1; x < gridSize; x++) {
+                velocities[y][x] *= damping;
+                heights[y][x] += velocities[y][x];
+            }
+        }
+    }
+
+    function draw() {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#00aaff';
+        ctx.lineWidth = 1;
+
+        for (let y = 0; y <= gridSize; y++) {
+            ctx.beginPath();
+            for (let x = 0; x <= gridSize; x++) {
+                const px = x * cellSize;
+                const py = y * cellSize + heights[y][x];
+                x === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+        }
+
+        for (let x = 0; x <= gridSize; x++) {
+            ctx.beginPath();
+            for (let y = 0; y <= gridSize; y++) {
+                const px = x * cellSize;
+                const py = y * cellSize + heights[y][x];
+                y === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+        }
+    }
+
+    function animate() {
+        update();
+        draw();
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    </script>
+
+</body>
+</html>
