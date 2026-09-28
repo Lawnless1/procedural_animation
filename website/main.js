@@ -1,5 +1,5 @@
 import {vec2d, Chain} from './chain.js';
-import {setCanvasContext, draw_chain, draw_spine, draw_outline, draw_shading, draw_eyes, draw_dorsal_fin, draw_ellipsefin, draw_backfin, draw_tail_fin, draw_skeleton} from './fish.js';
+import {setCanvasContext, draw_chain, draw_spine, draw_outline, draw_shading, draw_eyes, draw_dorsal_fin, draw_ellipsefin, draw_backfin, draw_tail_fin, draw_skeleton, beginFishFrame} from './fish.js';
 import {setCanvasContext as setWaterContext, updateWaterSurface, drawWaterGrid, addRipple} from './waterSurface.js';
 import {setCanvasContext as setSplashContext, draw_fish_splashes} from './fishSplash.js';
 import {setCanvasContext as setPondContext, drawPondBackground, drawRippleRings, drawPetals, drawVignette, spawnRipple, setScrollDepth} from './pond.js';
@@ -44,7 +44,38 @@ const progressBar = document.getElementById('progress');
 const hero = document.getElementById('hero');
 const navBar = document.querySelector('nav');
 let lastScrollY = window.scrollY;
+let scrollDir = 0;
+let snapTimer = null;
+// Directional magnetic scroll: after the user settles, ease the nearest
+// approaching card to center — but only along the direction of travel.
+// Scrolling down never snaps back up, and vice versa.
+function maybeSnap(){
+  let vh = window.innerHeight;
+  let cards = [...document.querySelectorAll('section.card')];
+  if (scrollDir > 0) {
+    for (let el of cards) {
+      let r = el.getBoundingClientRect();
+      let centered = Math.abs(r.top + r.height / 2 - vh / 2) < 40;
+      if (!centered && r.top > vh * 0.15 && r.top < vh * 0.75) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        break;
+      }
+    }
+  } else if (scrollDir < 0) {
+    for (let i = cards.length - 1; i >= 0; i--) {
+      let r = cards[i].getBoundingClientRect();
+      let centered = Math.abs(r.top + r.height / 2 - vh / 2) < 40;
+      if (!centered && r.bottom > vh * 0.25 && r.bottom < vh * 0.85) {
+        cards[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        break;
+      }
+    }
+  }
+}
 function reportScroll(){
+  let y = window.scrollY;
+  scrollDir = y > lastScrollY ? 1 : (y < lastScrollY ? -1 : scrollDir);
+  if (y > 40) dismissPressHint();
   let max = document.documentElement.scrollHeight - window.innerHeight;
   let d = max > 0 ? window.scrollY / max : 0;
   setScrollDepth(d);
@@ -62,6 +93,9 @@ function reportScroll(){
     navBar.classList.remove('hidden');
   }
   lastScrollY = window.scrollY;
+  // Settle then assist: only fires once motion pauses, with travel.
+  if (snapTimer) clearTimeout(snapTimer);
+  snapTimer = setTimeout(maybeSnap, 150);
 }
 window.addEventListener("scroll", reportScroll, { passive: true });
 reportScroll();
@@ -148,7 +182,8 @@ function pressAt(e, splash) {
   gatherUntil = performance.now() + GATHER_MS;
   if (!splash) return;
   addRipple(p.x, p.y, 5);
-  spawnRipple(p.x, p.y, VISITOR_TINT, 1.35);
+  spawnRipple(p.x, p.y, VISITOR_TINT, 1.35, 2.5);
+  dismissPressHint();
 }
 
 // function draw_line(pointA, pointB, width=2, color="#4caee8"){
@@ -208,9 +243,10 @@ function draw_fish(chain){
       spawnRipple(chain.head.x, chain.head.y);
     }
     // Rig mode: the whole school renders as bare procedural skeletons,
-    // each tagged with its own variety name.
+    // each tagged with its own variety name. Small viewports decimate
+    // to every 3rd joint so the rig stays legible when scaled down.
     if (rigMode) {
-      draw_skeleton(chain);
+      draw_skeleton(chain, null, worldScale < 0.7 ? 3 : 1);
       return;
     }
     draw_ellipsefin(chain, "left", 10);
@@ -237,7 +273,6 @@ function splashSeedFor(chain){
 
 function move_fish(x, y, chain){
   let angle = Math.sin(Date.now()/1000);
-  console.log(angle);
   let direction = new vec2d(x-chain.head.x, y-chain.head.y);
   direction = new vec2d(x-chain.head.x, y-chain.head.y).add(direction.right90().unit().multiply(angle*200));
   draw_point(chain.head.add(direction));
@@ -441,13 +476,38 @@ if (calmToggle) {
   });
 }
 
+// Press hint: appears once shortly after load, leaves on first press
+// or after a while.
+const pressHint = document.getElementById('press-hint');
+let pressHintDone = false;
+function dismissPressHint(){
+  if (pressHintDone) return;
+  pressHintDone = true;
+  if (pressHint) pressHint.classList.add('gone');
+}
+if (pressHint) {
+  setTimeout(() => { if (!pressHintDone) pressHint.classList.add('show'); }, 1300);
+  setTimeout(dismissPressHint, 14000);
+}
+
 let lastFrame = performance.now();
 let lastStreakAt = 0;
 const STREAK_MS = 500; // metronome for hold rings: slow enough to stay calm
+// Live FPS readout, refreshed twice a second so the DOM write itself
+// never becomes the thing being measured.
+const fpsEl = document.getElementById('fps');
+let fpsFrames = 0;
+let fpsLastAt = performance.now();
 function animate() {
     let now = performance.now();
     let dt = Math.min(0.05, (now - lastFrame) / 1000); // clamped frame delta
     lastFrame = now;
+    fpsFrames++;
+    if (fpsEl && now - fpsLastAt >= 500) {
+        fpsEl.textContent = `${Math.round(fpsFrames * 1000 / (now - fpsLastAt))} fps`;
+        fpsFrames = 0;
+        fpsLastAt = now;
+    }
     let t = now / 1000;
 
     // Held press rings on a fixed metronome: regular in time, blind to
@@ -456,7 +516,7 @@ function animate() {
     if (pressHeld && now - lastStreakAt > STREAK_MS) {
         lastStreakAt = now;
         gatherUntil = now + GATHER_MS;
-        spawnRipple(gatherPoint.x, gatherPoint.y, VISITOR_TINT, 1.2);
+        spawnRipple(gatherPoint.x, gatherPoint.y, VISITOR_TINT, 1.2, 2.5);
     }
 
     drawPondBackground(t);
@@ -465,6 +525,7 @@ function animate() {
     drawWaterGrid("rgba(191, 227, 242, 0.32)");
 
     // Apply Boyd's Algorithm and Draw
+    beginFishFrame();
     school.forEach(fish => {
       applyBoids(fish, school, new vec2d(mouse.x, mouse.y));
       draw_fish(fish);

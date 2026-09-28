@@ -112,18 +112,42 @@ function drifted(p, t, W, H, parallax = 0) {
     };
 }
 
+// Graded water base, cached offscreen: the grade only changes with
+// scroll depth, so re-render on depth shift (past epsilon) or resize
+// and blit otherwise. Saves a fullscreen gradient computation per frame;
+// washes and dapple below stay live.
+let gradeCache = null;
+let gradeCacheDepth = -1;
+
+function paintGrade(g2d, W, H, stops) {
+    const grad = g2d.createLinearGradient(0, 0, W * 0.9, H);
+    for (let i = 0; i < stops.length; i++) {
+        let c = stops[i];
+        grad.addColorStop(GRADE_POS[i], `rgb(${c[0]}, ${c[1]}, ${c[2]})`);
+    }
+    g2d.fillStyle = grad;
+    g2d.fillRect(0, 0, W, H);
+}
+
 // Graded water base: the scroll depth picks the light, day, sunset,
 // night, while washes and dapple keep their cool pastel drift.
 export function drawPondBackground(t) {
     const W = canvas.width, H = canvas.height;
     const stops = gradeAt(scrollDepth);
-    const g = ctx.createLinearGradient(0, 0, W * 0.9, H);
-    for (let i = 0; i < stops.length; i++) {
-        let c = stops[i];
-        g.addColorStop(GRADE_POS[i], `rgb(${c[0]}, ${c[1]}, ${c[2]})`);
+    let blitted = false;
+    if (typeof document !== "undefined") {
+        if (!gradeCache) gradeCache = document.createElement("canvas");
+        if (gradeCache.width !== W || gradeCache.height !== H ||
+            Math.abs(scrollDepth - gradeCacheDepth) > 0.002) {
+            gradeCache.width = W;
+            gradeCache.height = H;
+            paintGrade(gradeCache.getContext("2d"), W, H, stops);
+            gradeCacheDepth = scrollDepth;
+        }
+        ctx.drawImage(gradeCache, 0, 0);
+        blitted = true;
     }
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    if (!blitted) paintGrade(ctx, W, H, stops);
 
     // Washes thin out toward night so the dark water reads clean.
     const washDim = 1 - 0.55 * scrollDepth;
@@ -168,9 +192,10 @@ export function drawPondBackground(t) {
 
 // Queue a Huygens ripple at canvas pixels (call alongside addRipple).
 // tint defaults to the fishes' icy pale; the visitor's moonlit silver
-// is brighter kin. boost scales peak alpha for emphasis.
-export function spawnRipple(x, y, tint = null, boost = 1) {
-    ripples.push({ x, y, age: 0, life: 3.0, maxR: 90 + Math.random() * 80, tint, boost });
+// is brighter kin. boost scales peak alpha, width sets line weight for
+// emphasis. Visitor rings ride thicker so the two sources read apart.
+export function spawnRipple(x, y, tint = null, boost = 1, width = 1.5) {
+    ripples.push({ x, y, age: 0, life: 3.0, maxR: 90 + Math.random() * 80, tint, boost, width });
     if (ripples.length > 24) ripples.shift();
 }
 
@@ -186,7 +211,6 @@ export function drawRippleRings(dt) {
         if (ripples.length > 24) ripples.shift();
     }
     ctx.save();
-    ctx.lineWidth = 1.5;
     for (let i = ripples.length - 1; i >= 0; i--) {
         let r = ripples[i];
         r.age += dt;
@@ -199,6 +223,7 @@ export function drawRippleRings(dt) {
         let tint = r.tint ?? [235, 246, 252];
         let peak = Math.min(0.7, 0.5 * (r.boost ?? 1));
         let alpha = peak * (1 - k);          // linear decay
+        ctx.lineWidth = r.width ?? 1.5;
         for (let ring = 0; ring < 2; ring++) {
             let rr = Math.max(0.1, rad - ring * 14);
             ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(alpha * (1 - ring * 0.4)).toFixed(3)})`;

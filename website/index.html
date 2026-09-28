@@ -19,9 +19,6 @@
                          "Yu Gothic", "Segoe UI", sans-serif;
             scrollbar-width: none;
         }
-        /* Subtle magnetic scroll: proximity (never mandatory) eases each
-           stop into view without wrestling the reader. */
-        html { scroll-snap-type: y proximity; }
         body::-webkit-scrollbar { display: none; }
         #myCanvas {
             position: fixed;
@@ -79,7 +76,6 @@
         /* Hero: the pond speaks first, the name arrives quietly. */
         .hero {
             min-height: 100vh;
-            scroll-snap-align: start;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -135,7 +131,6 @@
            as you scroll. */
         section.card {
             max-width: 640px;
-            scroll-snap-align: center;
             margin: 0 auto 22vh auto;
             padding: 2.6rem 2.8rem;
             background: var(--paper);
@@ -228,6 +223,40 @@
             opacity: 0 !important;
             pointer-events: none !important;
         }
+        /* First-visit hint: teaches the press in one line, then leaves. */
+        #press-hint {
+            position: fixed;
+            left: 50%;
+            bottom: calc(6.8rem + env(safe-area-inset-bottom));
+            transform: translateX(-50%) translateY(8px);
+            z-index: 10;
+            font-size: 0.78rem;
+            letter-spacing: 0.18em;
+            color: #eef6fb;
+            text-shadow: 0 1px 12px rgba(10, 30, 46, 0.7);
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        #press-hint.show { opacity: 0.9; transform: translateX(-50%) translateY(0); }
+        #press-hint.gone { opacity: 0 !important; }
+        #fps {
+            position: fixed;
+            top: 4.2rem;
+            right: 1rem;
+            z-index: 10;
+            font-family: ui-monospace, monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.14em;
+            color: #e6f2fa;
+            background: rgba(12, 30, 46, 0.45);
+            border: 1px solid rgba(159, 208, 232, 0.25);
+            border-radius: 6px;
+            padding: 0.3rem 0.6rem;
+            opacity: 0.8;
+            pointer-events: none;
+        }
         footer {
             position: relative;
             z-index: 1;
@@ -302,6 +331,12 @@ Your browser does not support the HTML canvas tag.
     <button id="calm-toggle" class="pond-pill" aria-pressed="false" title="Clear everything but the pond">
         <span class="caption">still water</span>
     </button>
+
+    <!-- FPS readout, parked for prod. Uncomment to tune performance.
+    <div id="fps">-- fps</div>
+    -->
+
+    <div id="press-hint">press the water, the koi will come</div>
 
 <script type="module" src="main.js"></script>
 </body>

@@ -137,14 +137,12 @@ export function draw_fish_splashes(chain, body_length = 33, seed = 1, count = nu
         }
         ctx.closePath();
 
+        // Flat koi ink. No rim stroke: the Fourier edge plus body shading
+        // already carries the boundary, and strokes here cost a full extra
+        // overdraw pass per patch for little visual return.
         let ink = inks[sp.inkIndex];
         ctx.fillStyle = `rgba(${ink[0]}, ${ink[1]}, ${ink[2]}, ${alpha.toFixed(3)})`;
         ctx.fill();
-        // Soft rim: same ink at low alpha, wide soft stroke.
-        ctx.strokeStyle = `rgba(${ink[0]}, ${ink[1]}, ${ink[2]}, ${(alpha * 0.35).toFixed(3)})`;
-        ctx.lineWidth = Math.max(1.5, R * 0.18);
-        ctx.lineJoin = "round";
-        ctx.stroke();
     }
 
     ctx.restore();

@@ -1,6 +1,21 @@
 import { vec2d, Chain } from './chain.js';
 import { resolveVariety } from './koiVarieties.js';
 
+// Per-frame memoization: bend angle and outline rails are pure functions
+// of joint positions, yet dorsal, tail, shading, and splash clips each
+// re-derive them every frame (thousands of throwaway vec2d per second).
+// Cached on a frame stamp bumped once per rAF: zero visual change.
+let fishFrame = 0;
+export function beginFishFrame() { fishFrame++; }
+
+function bendOf(chain) {
+    if (chain._bendFrame !== fishFrame) {
+        chain._bend = chain.internal_angle;
+        chain._bendFrame = fishFrame;
+    }
+    return chain._bend;
+}
+
 // Single source for the translucent fin aesthetic: opaque pearl at the
 // fin root dissolving into a sheer cool-white edge. No stroke contour,
 // the opacity falloff alone separates fin from body.
@@ -56,20 +71,21 @@ export function draw_chain(chain){
 // Blueprint rig: the procedural skeleton itself, joint envelopes,
 // bone directions, and a tracked head node, drawn so viewers see the
 // constraint rig driving the skin. Labels default to the fish's own
-// koi variety, so the rig names its color scheme.
-export function draw_skeleton(chain, label = null) {
+// koi variety, so the rig names its color scheme. stride decimates
+// joints on small screens (43 nodes turn to mush when scaled down).
+export function draw_skeleton(chain, label = null, stride = 1) {
     const name = (label ?? resolveVariety(chain).variety.label).toLowerCase();
     ctx.save();
     ctx.strokeStyle = "rgba(159, 208, 232, 0.85)";
     ctx.fillStyle = "rgba(159, 208, 232, 0.10)";
     ctx.lineWidth = 1;
-    for (let i = 0; i < chain.n; i++){
+    for (let i = 0; i < chain.n; i += stride){
         ctx.beginPath();
         ctx.arc(chain.positions[i].x, chain.positions[i].y, chain.shape[i], 0, 2 * Math.PI);
         ctx.fill();
         ctx.stroke();
     }
-    draw_spine(chain);
+    draw_spine(chain, stride);
     // Fin rigging: the exact skin traces (dorsal, pectorals, back pair,
     // tail, same parameters as draw_fish), stroked blueprint-thin.
     trace_dorsal_fin(chain, 6, 20, 5);
@@ -93,14 +109,14 @@ export function draw_skeleton(chain, label = null) {
     ctx.restore();
 }
 
-export function draw_spine(chain){
-    for (let i = 1; i < chain.n; i++){
-        let delta = chain.positions[i-1].subtract(chain.positions[i])
-        draw_arrow(chain.positions[i].x, chain.positions[i].y, chain.positions[i-1].x, chain.positions[i-1].y);
-        let left = delta.left90().add(chain.positions[i-1]);
-        let right = delta.right90().add(chain.positions[i-1]);
-        draw_arrow(chain.positions[i-1].x, chain.positions[i-1].y, left.x, left.y);
-        draw_arrow(chain.positions[i-1].x, chain.positions[i-1].y, right.x, right.y);
+export function draw_spine(chain, stride = 1){
+    for (let i = stride; i < chain.n; i += stride){
+        let delta = chain.positions[i-stride].subtract(chain.positions[i])
+        draw_arrow(chain.positions[i].x, chain.positions[i].y, chain.positions[i-stride].x, chain.positions[i-stride].y);
+        let left = delta.left90().add(chain.positions[i-stride]);
+        let right = delta.right90().add(chain.positions[i-stride]);
+        draw_arrow(chain.positions[i-stride].x, chain.positions[i-stride].y, left.x, left.y);
+        draw_arrow(chain.positions[i-stride].x, chain.positions[i-stride].y, right.x, right.y);
     }
 }
 
@@ -125,13 +141,16 @@ export function draw_outline(chain, body_length){
 }
 
 // Outline rails of the tubular body: single source for the silhouette
-// path, the splash clip, and the shading strips.
+// path, the splash clip, and the shading strips. Memoized per frame.
 export function bodyOutlines(chain){
+    if (chain._railsFrame === fishFrame) return chain._rails;
     let lefts = chain.positions.slice(1).map((_, i)=>chain.positions[i].subtract(chain.positions[i+1]).left90().unit().multiply(chain.shape[i]).add(chain.positions[i]));
     lefts.push(chain.positions[chain.n-2].subtract(chain.positions[chain.n-1]).left90().unit().multiply(chain.shape[chain.n-1]).add(chain.positions[chain.n-1]));
     let rights = chain.positions.slice(1).map((_, i)=>chain.positions[i].subtract(chain.positions[i+1]).right90().unit().multiply(chain.shape[i]).add(chain.positions[i]));
     rights.push(chain.positions[chain.n-2].subtract(chain.positions[chain.n-1]).right90().unit().multiply(chain.shape[chain.n-1]).add(chain.positions[chain.n-1]));
-    return { lefts, rights };
+    chain._rails = { lefts, rights };
+    chain._railsFrame = fishFrame;
+    return chain._rails;
 }
 
 // Silhouette path (no paint): shared by the body fill, the splash clip,
@@ -171,7 +190,10 @@ export function draw_shading(chain, body_length){
     ctx.save();
     buildBodyPath(chain, body_length);
     ctx.clip();
-    for (let i = 0; i < body_length - 1; i++){
+    // Strips run two segments wide: the rail-to-rail gradient is identical
+    // per strip, so halving the count only coarsens invisible banding.
+    for (let i = 0; i < body_length - 1; i += 2){
+        let j = Math.min(i + 2, body_length - 1);
         const g = ctx.createLinearGradient(lefts[i].x, lefts[i].y, rights[i].x, rights[i].y);
         g.addColorStop(0, "rgba(18, 28, 44, 0.22)");
         g.addColorStop(0.5, "rgba(255, 255, 255, 0.12)");
@@ -179,8 +201,8 @@ export function draw_shading(chain, body_length){
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.moveTo(lefts[i].x, lefts[i].y);
-        ctx.lineTo(lefts[i+1].x, lefts[i+1].y);
-        ctx.lineTo(rights[i+1].x, rights[i+1].y);
+        ctx.lineTo(lefts[j].x, lefts[j].y);
+        ctx.lineTo(rights[j].x, rights[j].y);
         ctx.lineTo(rights[i].x, rights[i].y);
         ctx.closePath();
         ctx.fill();
@@ -229,7 +251,7 @@ function trace_dorsal_fin(chain, start_point, end_point, quadratic_control_dist,
     }
 
     let directionVec = chain.positions[end_point-quadratic_control_dist-1].subtract(chain.positions[end_point-quadratic_control_dist]);
-    let internal_angle = chain.internal_angle;
+    let internal_angle = bendOf(chain);
     directionVec = (internal_angle > 0) ? directionVec.left90() : directionVec.right90();
     directionVec = directionVec.unit().multiply(Math.abs(internal_angle*quadratic_multiplier));
     let quadratic_control_point = chain.positions[end_point-quadratic_control_dist].add(directionVec);
@@ -245,7 +267,6 @@ function trace_dorsal_fin(chain, start_point, end_point, quadratic_control_dist,
 
 export function draw_dorsal_fin(chain, start_point, end_point, quadratic_control_dist, quadratic_multiplier){
     let quadratic_control_point = trace_dorsal_fin(chain, start_point, end_point, quadratic_control_dist, quadratic_multiplier);
-    console.log("internal angle: ", chain.internal_angle);
     // Translucent fin: opaque pearl at the spine base fading to sheer at
     // the tip. No stroke contour, the fade alone separates fin from body.
     let dorsalBase = chain.positions[start_point];
@@ -369,7 +390,7 @@ function trace_tail_fin(chain, tail_start){
 
     // Get direction vector using the same method as dorsal fin
     let directionVec = chain.positions[chain.n - 1 - control_dist - 1].subtract(chain.positions[chain.n - 1 - control_dist]);
-    let internal_angle = chain.internal_angle;
+    let internal_angle = bendOf(chain);
     let tail_direction = (internal_angle > 0) ? "left" : "right";
     directionVec = (internal_angle > 0) ? directionVec.left90() : directionVec.right90();
     directionVec = directionVec.unit().multiply(Math.abs(internal_angle * control_multiplier));
