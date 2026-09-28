@@ -56,10 +56,17 @@ const navBar = document.querySelector('nav');
 let lastScrollY = window.scrollY;
 let scrollDir = 0;
 let snapTimer = null;
+let suppressSnapUntil = 0;
+// Anchor rides (navbar) glide past cards on their way elsewhere: hold
+// the magnet for a beat so it never hijacks the trip.
+document.querySelectorAll('nav a[href^="#"]').forEach(a => {
+  a.addEventListener('click', () => { suppressSnapUntil = performance.now() + 1500; });
+});
 // Directional magnetic scroll: after the user settles, ease the nearest
 // approaching card to center — but only along the direction of travel.
 // Scrolling down never snaps back up, and vice versa.
 function maybeSnap(){
+  if (performance.now() < suppressSnapUntil) return;
   let vh = window.innerHeight;
   let cards = [...document.querySelectorAll('section.card')];
   if (scrollDir > 0) {
