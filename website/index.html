@@ -3,13 +3,270 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Eric Deng</title>
+    <style>
+        :root {
+            --ink: #14202e;
+            --paper: rgba(253, 251, 244, 0.86);
+            --accent: #c65a3a;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: #123a5e;
+            color: var(--ink);
+            font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+                         "Yu Gothic", "Segoe UI", sans-serif;
+            scrollbar-width: none;
+        }
+        body::-webkit-scrollbar { display: none; }
+        #myCanvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            z-index: 0;
+        }
+
+        /* Top navbar: frosted ink bar with a scroll-progress thread. */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.9rem 2rem;
+            background: rgba(12, 30, 46, 0.45);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: #f3efe4;
+        }
+        nav .brand {
+            font-family: "Hiragino Mincho ProN", "Yu Mincho", Georgia, serif;
+            letter-spacing: 0.18em;
+            font-size: 0.95rem;
+            text-decoration: none;
+            color: inherit;
+        }
+        nav .links a {
+            color: inherit;
+            text-decoration: none;
+            margin-left: 1.6rem;
+            font-size: 0.85rem;
+            letter-spacing: 0.12em;
+            opacity: 0.8;
+        }
+        nav .links a:hover { opacity: 1; }
+        #progress {
+            position: absolute;
+            left: 0; bottom: 0;
+            height: 2px;
+            width: 100%;
+            transform-origin: 0 50%;
+            transform: scaleX(0);
+            background: linear-gradient(90deg, #9fd0e8, #f6c9a2);
+        }
+
+        main { position: relative; z-index: 1; }
+
+        /* Hero: the pond speaks first, the name arrives quietly. */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #f7f3e8;
+            text-shadow: 0 1px 24px rgba(10, 30, 46, 0.55);
+        }
+        .hero h1 {
+            font-family: "Hiragino Mincho ProN", "Yu Mincho", Georgia, serif;
+            font-weight: 400;
+            font-size: clamp(3rem, 8vw, 5.5rem);
+            letter-spacing: 0.28em;
+            margin: 0 0 0.6rem 0.28em;
+            animation: arrive 1.6s ease-out both;
+        }
+        .hero p {
+            margin: 0;
+            font-size: clamp(0.9rem, 2vw, 1.05rem);
+            letter-spacing: 0.22em;
+            opacity: 0.85;
+            animation: arrive 1.6s ease-out 0.35s both;
+        }
+        .scroll-hint {
+            position: absolute;
+            bottom: 2.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.3em;
+            opacity: 0.7;
+            animation: arrive 1.6s ease-out 0.8s both;
+        }
+        .scroll-hint::after {
+            content: "";
+            width: 1px;
+            height: 44px;
+            background: currentColor;
+            animation: dip 2.4s ease-in-out infinite;
+        }
+        @keyframes arrive {
+            from { opacity: 0; transform: translateY(14px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes dip {
+            0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
+            50% { transform: scaleY(1); opacity: 0.9; }
+        }
+
+        /* Content floats over the pond as frosted paper, arriving
+           as you scroll. */
+        section.card {
+            max-width: 640px;
+            margin: 0 auto 22vh auto;
+            padding: 2.6rem 2.8rem;
+            background: var(--paper);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 4px;
+            box-shadow: 0 18px 60px rgba(8, 24, 38, 0.35);
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.45s ease-out, transform 0.45s ease-out;
+        }
+        section.card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        section.card h2 {
+            font-family: "Hiragino Mincho ProN", "Yu Mincho", Georgia, serif;
+            font-weight: 400;
+            letter-spacing: 0.24em;
+            font-size: 1.1rem;
+            margin: 0 0 1.4rem 0;
+            color: var(--accent);
+        }
+        section.card p { line-height: 1.6; margin: 0 0 0.7rem 0; }
+        section.card a { color: var(--accent); }
+
+        /* Rig toggle: a quiet invitation, bottom-right. The breathing dot
+           does the yearning. */
+        #rig-toggle {
+            position: fixed;
+            right: 1.4rem;
+            bottom: 1.4rem;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.55rem 1rem;
+            font-family: ui-monospace, monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.22em;
+            color: #e6f2fa;
+            background: rgba(12, 30, 46, 0.45);
+            border: 1px solid rgba(159, 208, 232, 0.35);
+            border-radius: 999px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            cursor: pointer;
+            opacity: 0.75;
+            transition: opacity 0.3s, border-color 0.3s;
+        }
+        #rig-toggle:hover { opacity: 1; border-color: rgba(159, 208, 232, 0.8); }
+        #rig-toggle .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            border: 1px solid #9fd0e8;
+            animation: breathe 2.6s ease-in-out infinite;
+        }
+        #rig-toggle[aria-pressed="true"] .dot {
+            background: #9fd0e8;
+            animation: none;
+            box-shadow: 0 0 10px rgba(159, 208, 232, 0.9);
+        }
+        @keyframes breathe {
+            0%, 100% { box-shadow: 0 0 0 rgba(159, 208, 232, 0); }
+            50% { box-shadow: 0 0 12px rgba(159, 208, 232, 0.9); }
+        }
+        footer {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            color: #f3efe4;
+            padding: 0 1rem 4rem 1rem;
+            font-size: 0.8rem;
+            letter-spacing: 0.2em;
+            opacity: 0.75;
+            text-shadow: 0 1px 12px rgba(10, 30, 46, 0.6);
+        }
+    </style>
 </head>
 
 <body>
-    <canvas id="myCanvas" width="1920" height="1080" style="border:1px solid #000000;">
+    <canvas id="myCanvas" width="1920" height="1080">
 Your browser does not support the HTML canvas tag.
 </canvas>
+
+    <nav>
+        <a class="brand" href="#top">ERIC DENG</a>
+        <div class="links">
+            <a href="#about">About</a>
+            <a href="#pond">Pond</a>
+            <a href="#contact">Contact</a>
+        </div>
+        <div id="progress"></div>
+    </nav>
+
+    <main id="top">
+        <header class="hero" id="hero">
+            <h1>Eric Deng</h1>
+            <p>Welcome, come sit by the water.</p>
+            <div class="scroll-hint">SCROLL</div>
+        </header>
+
+        <section class="card" id="about">
+            <h2>ABOUT</h2>
+            <p>Hey, thanks for dropping by my pond! :D</p>
+            <p>I'm Eric, a Software Engineer that loves to build cool stuff and solve interesting problems.</p>
+            <p>I typically work on whatever piques my interest at any point in time.</p>
+            <p>Feel free to make yourself at home and look around.</p>
+        </section>
+
+        <section class="card" id="pond">
+            <h2>THIS POND</h2>
+            <p>This page is a living sketch: a koi pond rendered procedurally.
+            Scroll, and day falls into night.</p>
+            <p>It's my take on constraint chains: every fish is dragged
+            through the water by its head, schooling by boid rules over a
+            simulated wave grid, all drawn fresh each frame. Press
+            the button at the bottom right to see how every fish is put together.</p>
+            <p style="font-size: 0.85rem; opacity: 0.7;">Sparked by an
+            <a href="https://www.youtube.com/watch?v=qlfh_rv6khY" target="_blank" rel="noopener">interesting video</a> I saw.</p>
+        </section>
+
+        <section class="card" id="contact">
+            <h2>CONTACT</h2>
+            <p>Feel free to drop by and say hi at
+            <a href="mailto:hello@edeng.space">hello@edeng.space</a>, find me on
+            <a href="https://www.linkedin.com/in/eric-rr-deng/" target="_blank" rel="noopener">LinkedIn</a>, or browse
+            the code on <a href="https://github.com/Lawnless1" target="_blank" rel="noopener">GitHub</a>.</p>
+        </section>
+    </main>
+
+    <footer>Don't forget to drink water.</footer>
+
+    <button id="rig-toggle" aria-pressed="false" title="Reveal the procedural rigs">
+        <span class="dot"></span><span class="caption">under the scales</span>
+    </button>
+
 <script type="module" src="main.js"></script>
 </body>
 </html>

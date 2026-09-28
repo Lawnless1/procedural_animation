@@ -6,12 +6,37 @@ Procedural chain-constraint animation experiments:
 
 ## Repo layout
 
-- `chain.py` — Python chain implementation
-- `test.py` — pygame mouse-follow demo
-- `website/index.html` — canvas entry, loads `main.js` as ES module
-- `website/main.js` — scene: fish school, water grid, lilypads
-- `website/chain.ts` / `website/chain.js` — vector + chain source and compiled output
-- `website/fish.js`, `website/lilypad.js`, `website/waterSurface.js`, `website/triangleSurface.js` — drawing modules
+- `chain.py`, Python chain implementation
+- `test.py`, pygame mouse-follow demo
+- `website/index.html`, canvas entry, loads `main.js` as ES module
+- `website/main.js`, scene: fish school, water grid, lilypads
+- `website/chain.ts` / `website/chain.js`, vector + chain source and compiled output
+- `website/fish.js`, `website/fishSplash.js`, `website/koiVarieties.js`, `website/pond.js`, `website/waterSurface.js`, `website/triangleSurface.js`, drawing modules
+
+## Adding a koi variety
+
+Palettes live in one place: `website/koiVarieties.js`. To add/remove a type:
+
+1. Add (or delete) a frozen entry in `KOI_VARIETIES`, `{ label, body, inks, patchCount }`.
+2. Reference its key in the `school` list in `website/main.js`.
+
+`fish.js` (body gradient) and `fishSplash.js` (patch inks/count) both resolve
+through `resolveVariety(chain)`, unknown keys warn once in the console and
+fall back to `sanke`, so a typo can never silently render the wrong fish.
+
+## Branching workflow
+
+This repo uses branch development. `main` is the stable branch.
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/<short-name>
+# edit, verify on localhost, then push + open a PR into main
+git push -u origin feature/<short-name>
+```
+
+Do not commit directly to `main` for features. Keep each feature in its own branch until reviewed.
 
 ## Run on localhost
 

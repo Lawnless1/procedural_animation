@@ -1,25 +1,58 @@
 import {vec2d, Chain} from './chain.js';
-import {setCanvasContext, draw_chain, draw_spine, draw_outline, draw_eyes, draw_dorsal_fin, draw_ellipsefin, draw_backfin, draw_tail_fin} from './fish.js';
-import {setCanvasContext as setLilypadContext, draw_lilypad} from './lilypad.js';
+import {setCanvasContext, draw_chain, draw_spine, draw_outline, draw_shading, draw_eyes, draw_dorsal_fin, draw_ellipsefin, draw_backfin, draw_tail_fin, draw_skeleton} from './fish.js';
 import {setCanvasContext as setWaterContext, updateWaterSurface, drawWaterGrid, addRipple} from './waterSurface.js';
+import {setCanvasContext as setSplashContext, draw_fish_splashes} from './fishSplash.js';
+import {setCanvasContext as setPondContext, drawPondBackground, drawRippleRings, drawPetals, drawVignette, spawnRipple, setScrollDepth} from './pond.js';
 
 const canvas = document.getElementById('myCanvas');
 const ctx = canvas.getContext('2d');
 
-// Initialize fish module with canvas context
-setCanvasContext(ctx);
-setLilypadContext(ctx);
-setWaterContext(ctx);
-
-function clear_canvas(){
-    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#0c1217');
-    // gradient.addColorStop(1, '#2d5f7f');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+// Fit the pond to the window: landing-page full-bleed background.
+// Mouse mapping already compensates via bounding-rect scaling.
+function fitCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  setCanvasContext(ctx);
+  setWaterContext(ctx);
+  setSplashContext(ctx);
+  setPondContext(ctx);
 }
 
+// Initialize all canvas modules, then fit the pond to the window:
+// landing-page full-bleed background. Mouse mapping already compensates
+// via bounding-rect scaling.
+fitCanvas();
+window.addEventListener("resize", fitCanvas);
 
+// Scroll depth 0→1 drives the pond's day→sunset→night grade and the
+// navbar progress thread. The hero drifts up slower than the page
+// (gentle parallax) while fish and physics run on their own clock.
+const progressBar = document.getElementById('progress');
+const hero = document.getElementById('hero');
+function reportScroll(){
+  let max = document.documentElement.scrollHeight - window.innerHeight;
+  let d = max > 0 ? window.scrollY / max : 0;
+  setScrollDepth(d);
+  if (progressBar) progressBar.style.transform = `scaleX(${d})`;
+  if (hero) {
+    let fade = Math.min(1, window.scrollY / (window.innerHeight * 0.85));
+    hero.style.transform = `translateY(${window.scrollY * 0.28}px)`;
+    hero.style.opacity = `${1 - fade}`;
+  }
+}
+window.addEventListener("scroll", reportScroll, { passive: true });
+reportScroll();
+
+// Cards arrive every time they enter view, in either scroll direction.
+// Dual thresholds form a hysteresis band (show past 15%, hide below
+// 2%) so a card parked on the edge never flickers.
+const revealObserver = new IntersectionObserver((entries) => {
+  for (let e of entries) {
+    if (e.intersectionRatio >= 0.15) e.target.classList.add('visible');
+    else if (e.intersectionRatio <= 0.02) e.target.classList.remove('visible');
+  }
+}, { threshold: [0.02, 0.15] });
+document.querySelectorAll('section.card').forEach(el => revealObserver.observe(el));
 
 function getMouseCanvasPos(canvas, evt) {
   const rect = canvas.getBoundingClientRect();
@@ -47,8 +80,12 @@ canvas.addEventListener("mousemove", e => {
 //     ctx.stroke();
 // }
 
-function makeChain(size){
-  let shape = [68, 80, 90, 100, 108, 110, 112, 113, 115, 114, 113, 111, 110, 107, 105, 102, 100, 95, 90, 85, 80, 75, 70, 65, 60, 53, 47, 40, 33, 25, 17, 8, 1, 10, 10,10,10,10, 10,10,10,10, 30].map((x)=>x/3).map((x)=>x*size);
+function makeChain(size, variety = 'sanke'){
+  // Fusiform (koi-torpedo) half-width profile: fine rounded snout,
+  // deepest around the front third, long smooth taper to a narrow
+  // caudal peduncle. Monotonic rise then fall, no bumps. Tail stock
+  // past index 32 is rigging for the tail fin, not body flesh.
+  let shape = [38, 52, 64, 74, 82, 88, 93, 97, 100, 102, 103, 103, 102, 100, 98, 95, 92, 89, 85, 81, 77, 72, 67, 62, 57, 52, 47, 42, 37, 32, 27, 22, 14, 10, 10, 10, 10, 10, 10, 10, 10, 10, 30].map((x)=>x/3).map((x)=>x*size);
   let len = shape.length;
   let spine = Array.from({ length: len }, (_, i) => 32).map((x)=>x/3).map((x)=>x*size);
   
@@ -57,7 +94,9 @@ function makeChain(size){
   let startY = randint(canvas.height * 0.3, canvas.height * 0.7);
   let positions = Array.from({ length: len }, (_, i) => [startX, startY + (i * 10)]);
 
-  return new Chain(shape, spine, positions, size);
+  let chain = new Chain(shape, spine, positions, size);
+  chain.variety = variety;
+  return chain;
 }
 
 const MAX_INTERNAL_ANGLE = Math.PI * 0.035;
@@ -77,17 +116,41 @@ function draw_point(vector){
 
 
 function draw_fish(chain){
-    if (randint(0, 20) ==5) {
-    addRipple(chain.head.x, chain.head.y);
+    // Rare, faint disturbances, a koi gliding, not a stone dropping.
+    // Grid swell and visible tail rings on separate clocks so the rings
+    // stay special.
+    if (randint(0, 45) == 5) {
+      addRipple(chain.head.x, chain.head.y);
+    }
+    if (randint(0, 120) == 5) {
+      spawnRipple(chain.head.x, chain.head.y);
+    }
+    // Rig mode: the whole school renders as bare procedural skeletons,
+    // each tagged with its own variety name.
+    if (rigMode) {
+      draw_skeleton(chain);
+      return;
     }
     draw_ellipsefin(chain, "left", 10);
     draw_ellipsefin(chain, "right", 10);
     draw_backfin(chain, "left", 26, 30, 30, 50);
     draw_backfin(chain, "right", 26, 30, 30, 50);
     draw_tail_fin(chain, 32);
-    draw_outline(chain, 33);
+    draw_outline(chain, BODY_LENGTH);
+    draw_fish_splashes(chain, BODY_LENGTH, splashSeedFor(chain));
+    draw_shading(chain, BODY_LENGTH);
     draw_dorsal_fin(chain, 6, 20, 5, 15);
   }
+
+// Spine segments covered by the body silhouette (chain has 43 nodes;
+// the tail stock beyond this is drawn by draw_tail_fin).
+const BODY_LENGTH = 33;
+
+// Stable per-fish patch layout: variety is already encoded by key, size
+// decorrelates fish that share one.
+function splashSeedFor(chain){
+  return Math.floor(chain.size * 1000) + 7;
+}
 
 
 function move_fish(x, y, chain){
@@ -257,23 +320,39 @@ let points = generatePoints(100, 20);
 
 // var chain = makeChain(1);
 // var chain2 = makeChain(0.5);
-// Initialize a school of fish
+// Initialize a school of fish, one koi variety per fish.
 var school = [
-  makeChain(0.4),
-  makeChain(0.8),
-  makeChain(0.6),
-  makeChain(0.5),
-  makeChain(0.7)
+  makeChain(0.4, 'kohaku'),
+  makeChain(0.8, 'sanke'),
+  makeChain(0.6, 'yamabuki'),
+  makeChain(0.5, 'showa'),
+  makeChain(0.55, 'hi_utsuri'),
+  makeChain(0.65, 'sanke')
 ];
 
+// Rig toggle: one quiet button flips the whole school between skin
+// and skeleton. State lives here, next to the frame loop.
+let rigMode = false;
+const rigToggle = document.getElementById('rig-toggle');
+if (rigToggle) {
+  rigToggle.addEventListener('click', () => {
+    rigMode = !rigMode;
+    rigToggle.setAttribute('aria-pressed', `${rigMode}`);
+    rigToggle.querySelector('.caption').textContent = rigMode ? 'back to the pond' : 'under the scales';
+  });
+}
+
+let lastFrame = performance.now();
 function animate() {
-    clear_canvas();
-    
+    let now = performance.now();
+    let dt = Math.min(0.05, (now - lastFrame) / 1000); // clamped frame delta
+    lastFrame = now;
+    let t = now / 1000;
+
+    drawPondBackground(t);
+
     updateWaterSurface();
-    drawWaterGrid("#4caee8");
-
-    // Draw scenery
-
+    drawWaterGrid("rgba(191, 227, 242, 0.32)");
 
     // Apply Boyd's Algorithm and Draw
     school.forEach(fish => {
@@ -281,8 +360,10 @@ function animate() {
       draw_fish(fish);
     });
 
-    draw_lilypad(150, 150, 80, 60, Math.PI * 0.1, Math.PI * 2, 0.5, '#68b48a', '#68b068', 0);
-    draw_lilypad(600, 400, 100, 75, Math.PI * 0.5, Math.PI * 1.6, 1.2);
+    drawRippleRings(dt);
+
+    drawPetals(t, dt);
+    drawVignette();
     // for (let i = 0; i < points.length; i++) {
     //     draw_small_ellipse(points[i].x, points[i].y, i);
     // }

@@ -6,10 +6,12 @@ let cellSize;
 const heights = Array(gridSize + 1).fill(0).map(() => Array(gridSize + 1).fill(0));
 const velocities = Array(gridSize + 1).fill(0).map(() => Array(gridSize + 1).fill(0));
 
-// Chaos settings: High damping and high spread keep the energy moving
-const damping = 0.97; 
-const spread = 0.22;
-const maxVelocity = 20; // Prevents the grid from "exploding" or spiking too hard
+// Calm-water settings: low spread + firm damping so disturbances read as
+// a gentle surface swell seen from above, never plucked strings.
+// Grid proportions (gridSize/cellSize) are intentionally untouched.
+const damping = 0.95;
+const spread = 0.17;
+const maxVelocity = 6; // Prevents the grid from "exploding" or spiking too hard
 
 export function setCanvasContext(canvasCtx) {
     ctx = canvasCtx;
@@ -21,7 +23,7 @@ export function setCanvasContext(canvasCtx) {
  * Creates a "Diamond" ripple: concentrated enough to be chaotic, 
  * but spread to 4 neighbors to prevent the cross-section from snapping.
  */
-export function addRipple(x, y, intensity = 4) {
+export function addRipple(x, y, intensity = 2.4) {
     const gridX = Math.floor(x / cellSize);
     const gridY = Math.floor(y / cellSize);
     
@@ -30,8 +32,8 @@ export function addRipple(x, y, intensity = 4) {
         // Center point gets full force
         heights[gridY][gridX] += intensity;
         
-        // Immediate neighbors get a significant boost to keep the intersection "connected"
-        const neighborForce = intensity * 0.7;
+        // Immediate neighbors get a small share to keep the surface connected
+        const neighborForce = intensity * 0.4;
         if (gridX + 1 < gridSize) heights[gridY][gridX + 1] += neighborForce;
         if (gridX - 1 > 0)        heights[gridY][gridX - 1] += neighborForce;
         if (gridY + 1 < gridSize) heights[gridY + 1][gridX] += neighborForce;
@@ -73,7 +75,7 @@ export function drawWaterGrid(color = "#4caee8") {
             const py = y * cellSize + heights[y][x];
             x === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
         }
-        ctx.lineWidth = y % 2 === 0 ? 2 : 0.8;
+        ctx.lineWidth = y % 2 === 0 ? 1.2 : 0.5;
         ctx.stroke();
     }
     
@@ -85,7 +87,7 @@ export function drawWaterGrid(color = "#4caee8") {
             const py = y * cellSize + heights[y][x];
             y === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
         }
-        ctx.lineWidth = x % 2 === 0 ? 2 : 0.8;
+        ctx.lineWidth = x % 2 === 0 ? 1.2 : 0.5;
         ctx.stroke();
     }
 }
