@@ -494,7 +494,6 @@ function dismissPressHint(){
 }
 if (pressHint) {
   setTimeout(() => { if (!pressHintDone) pressHint.classList.add('show'); }, 1300);
-  setTimeout(dismissPressHint, 14000);
 }
 
 let lastFrame = performance.now();
