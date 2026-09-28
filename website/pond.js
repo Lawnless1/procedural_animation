@@ -11,6 +11,8 @@
 //   survives window resizes deterministically.
 let ctx;
 let canvas;
+let viewW = 0;
+let viewH = 0;
 
 // Scroll depth 0 (top, day) → 1 (bottom, night), set by main.js from
 // window scroll. Drives the day → sunset → night grade.
@@ -98,9 +100,12 @@ function initLayout() {
 }
 initLayout();
 
-export function setCanvasContext(canvasContext) {
+export function setCanvasContext(canvasContext, W = null, H = null) {
     ctx = canvasContext;
     canvas = ctx.canvas;
+    // Logical size in CSS pixels; the DPR backing store may be larger.
+    viewW = W ?? canvas.width;
+    viewH = H ?? canvas.height;
 }
 
 function drifted(p, t, W, H, parallax = 0) {
@@ -132,19 +137,22 @@ function paintGrade(g2d, W, H, stops) {
 // Graded water base: the scroll depth picks the light, day, sunset,
 // night, while washes and dapple keep their cool pastel drift.
 export function drawPondBackground(t) {
-    const W = canvas.width, H = canvas.height;
+    const W = viewW, H = viewH;
+    // Device-pixel backing for the cache so the blit stays retina-sharp
+    // under the DPR transform; drawn back into CSS-pixel space.
+    const bw = canvas.width, bh = canvas.height;
     const stops = gradeAt(scrollDepth);
     let blitted = false;
     if (typeof document !== "undefined") {
         if (!gradeCache) gradeCache = document.createElement("canvas");
-        if (gradeCache.width !== W || gradeCache.height !== H ||
+        if (gradeCache.width !== bw || gradeCache.height !== bh ||
             Math.abs(scrollDepth - gradeCacheDepth) > 0.002) {
-            gradeCache.width = W;
-            gradeCache.height = H;
-            paintGrade(gradeCache.getContext("2d"), W, H, stops);
+            gradeCache.width = bw;
+            gradeCache.height = bh;
+            paintGrade(gradeCache.getContext("2d"), bw, bh, stops);
             gradeCacheDepth = scrollDepth;
         }
-        ctx.drawImage(gradeCache, 0, 0);
+        ctx.drawImage(gradeCache, 0, 0, W, H);
         blitted = true;
     }
     if (!blitted) paintGrade(ctx, W, H, stops);
@@ -202,7 +210,7 @@ export function spawnRipple(x, y, tint = null, boost = 1, width = 1.5) {
 // Ambient ripple source so still water still breathes.
 let ambientTimer = 0;
 export function drawRippleRings(dt) {
-    const W = canvas.width, H = canvas.height;
+    const W = viewW, H = viewH;
     ambientTimer += dt;
     if (ambientTimer > 1.4) {
         ambientTimer = 0;
@@ -237,7 +245,7 @@ export function drawRippleRings(dt) {
 
 // Sakura drift: petals fall slowly, sway sinusoidally, wrap around.
 export function drawPetals(t, dt) {
-    const W = canvas.width, H = canvas.height;
+    const W = viewW, H = viewH;
     ctx.save();
     for (let p of petals) {
         p.fy += p.fall * dt;
@@ -265,7 +273,7 @@ export function drawPetals(t, dt) {
 // Cinematic vignette for landing-page focus: dark teal edges,
 // feathered with a smoothstep-like two-stop falloff. Deepens at night.
 export function drawVignette() {
-    const W = canvas.width, H = canvas.height;
+    const W = viewW, H = viewH;
     const R = Math.hypot(W, H) / 2;
     const g = ctx.createRadialGradient(W / 2, H / 2, R * 0.42, W / 2, H / 2, R * 0.78);
     g.addColorStop(0, "rgba(10, 34, 52, 0)");

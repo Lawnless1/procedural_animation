@@ -23,11 +23,13 @@ const damping = 0.95;
 const spread = 0.17;
 const maxVelocity = 6; // Prevents the grid from "exploding" or spiking too hard
 
-export function setCanvasContext(canvasCtx) {
+export function setCanvasContext(canvasCtx, W = null, H = null) {
     ctx = canvasCtx;
     canvas = ctx.canvas;
-    ROWS = Math.min(64, Math.max(1, Math.ceil(COLS * canvas.height / canvas.width)));
-    cellW = canvas.width / COLS;
+    // Logical (CSS-pixel) size keeps cells square on any backing store.
+    const w = W ?? canvas.width, h = H ?? canvas.height;
+    ROWS = Math.min(64, Math.max(1, Math.ceil(COLS * h / w)));
+    cellW = w / COLS;
     cellH = cellW;
     allocGrid();
 }

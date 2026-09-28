@@ -10,12 +10,17 @@ const ctx = canvas.getContext('2d');
 // Fit the pond to the window: landing-page full-bleed background.
 // Mouse mapping already compensates via bounding-rect scaling.
 function fitCanvas(){
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  // DPR-aware backing store (capped for fill-rate): drawing coordinates
+  // stay in CSS pixels via setTransform, so every module keeps working
+  // in the same units while retina screens get full sharpness.
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(window.innerWidth * dpr);
+  canvas.height = Math.round(window.innerHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   setCanvasContext(ctx);
-  setWaterContext(ctx);
+  setWaterContext(ctx, window.innerWidth, window.innerHeight);
   setSplashContext(ctx);
-  setPondContext(ctx);
+  setPondContext(ctx, window.innerWidth, window.innerHeight);
   computeWorldScale();
 }
 
@@ -114,8 +119,9 @@ document.querySelectorAll('section.card').forEach(el => revealObserver.observe(e
 function getMouseCanvasPos(canvas, evt) {
   const rect = canvas.getBoundingClientRect();
 
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
+  // CSS-pixel mapping: drawing coordinates are CSS pixels (see fitCanvas).
+  const scaleX = canvas.clientWidth / rect.width;
+  const scaleY = canvas.clientHeight / rect.height;
 
   return {
     x: (evt.clientX - rect.left) * scaleX,
@@ -207,12 +213,13 @@ function makeChain(size, variety = 'sanke'){
   let spine = Array.from({ length: len }, (_, i) => 32).map((x)=>x/3).map((x)=>x*size);
   
   // Start them randomly within the center of the canvas
-  let startX = randint(canvas.width * 0.3, canvas.width * 0.7);
-  let startY = randint(canvas.height * 0.3, canvas.height * 0.7);
+  let startX = randint(window.innerWidth * 0.3, window.innerWidth * 0.7);
+  let startY = randint(window.innerHeight * 0.3, window.innerHeight * 0.7);
   let positions = Array.from({ length: len }, (_, i) => [startX, startY + (i * 10)]);
 
   let chain = new Chain(shape, spine, positions, size);
   chain.variety = variety;
+  chain.worldScale = worldScale;
   return chain;
 }
 
@@ -346,7 +353,7 @@ function applyBoids(fish, allFish, mousePos) {
     }
 
     // Add Boundary & Mouse
-    steer = steer.add(getBoundarySteer(fish, canvas.width, canvas.height));
+    steer = steer.add(getBoundarySteer(fish, window.innerWidth, window.innerHeight));
     if (FOLLOW_MOUSE) {
       steer = steer.add(mousePos.subtract(fish.head).unit().multiply(BOID_SETTINGS.weights.mouse));
     }
@@ -416,8 +423,8 @@ function generatePoints(count, minDist) {
     while (points.length < count && attempts < maxAttempts) {
         attempts++;
 
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
+        const x = Math.random() * window.innerWidth;
+        const y = Math.random() * window.innerHeight;
 
         let valid = true;
 

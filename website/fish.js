@@ -88,7 +88,7 @@ export function draw_skeleton(chain, label = null, stride = 1) {
     draw_spine(chain, stride);
     // Fin rigging: the exact skin traces (dorsal, pectorals, back pair,
     // tail, same parameters as draw_fish), stroked blueprint-thin.
-    trace_dorsal_fin(chain, 6, 20, 5);
+    trace_dorsal_fin(chain, 6, 20, 5, 15);
     ctx.stroke();
     for (let dir of ["left", "right"]) {
         let frame = ellipsefin_frame(chain, dir, 10);
@@ -250,10 +250,13 @@ function trace_dorsal_fin(chain, start_point, end_point, quadratic_control_dist,
         ctx.lineTo(fin_point.x, fin_point.y);
     }
 
+    // Control distances are authored for full-size fish; worldScale keeps
+    // them proportional on small viewports (desktop scale is 1: no change).
+    let qs = quadratic_multiplier * (chain.worldScale ?? 1);
     let directionVec = chain.positions[end_point-quadratic_control_dist-1].subtract(chain.positions[end_point-quadratic_control_dist]);
     let internal_angle = bendOf(chain);
     directionVec = (internal_angle > 0) ? directionVec.left90() : directionVec.right90();
-    directionVec = directionVec.unit().multiply(Math.abs(internal_angle*quadratic_multiplier));
+    directionVec = directionVec.unit().multiply(Math.abs(internal_angle*qs));
     let quadratic_control_point = chain.positions[end_point-quadratic_control_dist].add(directionVec);
     ctx.quadraticCurveTo(
         quadratic_control_point.x,
@@ -340,8 +343,9 @@ function backfin_geometry(chain, direction, start_segment, end_segment, control_
     let start_point = get_sidevec(start_segment, direction).add(chain.positions[start_segment]);
     let end_point = get_sidevec(end_segment, direction).add(chain.positions[end_segment]);
 
-    // Use fixed control point distance for more rigid fins
-    let control_offset = get_sidevec(control_segment, direction).unit().multiply(control_point_multiplier);
+    // Use fixed control point distance for more rigid fins, scaled to
+    // the viewport like the dorsal multiplier.
+    let control_offset = get_sidevec(control_segment, direction).unit().multiply(control_point_multiplier * (chain.worldScale ?? 1));
     let control_point = chain.positions[control_segment].add(control_offset);
 
     return { start_point, end_point, control_point };
@@ -382,7 +386,7 @@ export function draw_backfin(chain, direction, start_segment, end_segment, contr
 function trace_tail_fin(chain, tail_start){
     const TAIL_START = tail_start;
     const control_dist = 0;
-    const control_multiplier = 20;
+    const control_multiplier = 20 * (chain.worldScale ?? 1);
 
     // Get positions along the tail
     let p1 = chain.positions[TAIL_START];
