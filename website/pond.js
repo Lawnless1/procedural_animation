@@ -167,8 +167,10 @@ export function drawPondBackground(t) {
 }
 
 // Queue a Huygens ripple at canvas pixels (call alongside addRipple).
-export function spawnRipple(x, y) {
-    ripples.push({ x, y, age: 0, life: 3.0, maxR: 90 + Math.random() * 80 });
+// tint defaults to the fishes' icy pale; the visitor's moonlit silver
+// is brighter kin. boost scales peak alpha for emphasis.
+export function spawnRipple(x, y, tint = null, boost = 1) {
+    ripples.push({ x, y, age: 0, life: 3.0, maxR: 90 + Math.random() * 80, tint, boost });
     if (ripples.length > 24) ripples.shift();
 }
 
@@ -191,12 +193,15 @@ export function drawRippleRings(dt) {
         if (r.age >= r.life) { ripples.splice(i, 1); continue; }
         let k = r.age / r.life;              // 0 → 1, linear wavefront age
         let rad = r.maxR * k;                // r = c·age
-        let alpha = 0.5 * (1 - k);           // linear decay
         let cx = r.x ?? r.fx * W, cy = r.y ?? r.fy * H;
         // Twin rings, 180° out of phase, the watercolor-pond signature.
+        // Visitor rings glow moonlit silver; fish rings stay icy pale.
+        let tint = r.tint ?? [235, 246, 252];
+        let peak = Math.min(0.7, 0.5 * (r.boost ?? 1));
+        let alpha = peak * (1 - k);          // linear decay
         for (let ring = 0; ring < 2; ring++) {
             let rr = Math.max(0.1, rad - ring * 14);
-            ctx.strokeStyle = `rgba(235, 246, 252, ${(alpha * (1 - ring * 0.4)).toFixed(3)})`;
+            ctx.strokeStyle = `rgba(${tint[0]}, ${tint[1]}, ${tint[2]}, ${(alpha * (1 - ring * 0.4)).toFixed(3)})`;
             ctx.beginPath();
             ctx.ellipse(cx, cy, rr, rr * 0.62, 0, 0, Math.PI * 2);
             ctx.stroke();

@@ -16,6 +16,19 @@ function fitCanvas(){
   setWaterContext(ctx);
   setSplashContext(ctx);
   setPondContext(ctx);
+  computeWorldScale();
+}
+
+// Fish proportions are tuned for a 960x1080 design viewport. Smaller
+// screens scale the whole fish world (body size, senses, swim speeds)
+// so composition and behavior stay identical everywhere.
+let worldScale = 1;
+let NEIGHBOR_DIST = 200;
+let BND_MARGIN = 480;
+function computeWorldScale(){
+  worldScale = Math.min(1, window.innerWidth / 960, window.innerHeight / 1080);
+  NEIGHBOR_DIST = 200 * worldScale;
+  BND_MARGIN = 480 * worldScale;
 }
 
 // Initialize all canvas modules, then fit the pond to the window:
@@ -29,6 +42,8 @@ window.addEventListener("resize", fitCanvas);
 // (gentle parallax) while fish and physics run on their own clock.
 const progressBar = document.getElementById('progress');
 const hero = document.getElementById('hero');
+const navBar = document.querySelector('nav');
+let lastScrollY = window.scrollY;
 function reportScroll(){
   let max = document.documentElement.scrollHeight - window.innerHeight;
   let d = max > 0 ? window.scrollY / max : 0;
@@ -39,6 +54,14 @@ function reportScroll(){
     hero.style.transform = `translateY(${window.scrollY * 0.28}px)`;
     hero.style.opacity = `${1 - fade}`;
   }
+  // Small screens: navbar slips away going down, returns going up.
+  if (navBar && window.innerWidth <= 640) {
+    let goingDown = window.scrollY > lastScrollY;
+    navBar.classList.toggle('hidden', goingDown && window.scrollY > 120);
+  } else if (navBar) {
+    navBar.classList.remove('hidden');
+  }
+  lastScrollY = window.scrollY;
 }
 window.addEventListener("scroll", reportScroll, { passive: true });
 reportScroll();
@@ -67,9 +90,66 @@ function getMouseCanvasPos(canvas, evt) {
 }
 let mouse = { x: 0, y: 0 };
 
-canvas.addEventListener("mousemove", e => {
-  mouse = getMouseCanvasPos(canvas, e);
+// Passive mouse-follow is OFF: the school wanders until invited by
+// press/tap. Flip FOLLOW_MOUSE to restore the old trailing cursor.
+const FOLLOW_MOUSE = false;
+if (FOLLOW_MOUSE) {
+  canvas.addEventListener("mousemove", e => {
+    mouse = getMouseCanvasPos(canvas, e);
+  });
+}
+
+// Press-to-gather: a press ripples the water and briefly biases the
+// whole school toward the press point. The pull decays quadratically
+// over a few seconds so fish visit, then wander off.
+let gatherPoint = { x: 0, y: 0 };
+let gatherUntil = 0;
+const GATHER_MS = 5000;
+// Moonlit silver visitor rings vs the fishes' icy pale (see pond.js).
+const VISITOR_TINT = [248, 250, 253];
+let pressHeld = false;
+// Touch drags scroll the page, so pond touch is tap-only: a quick,
+// near-stationary tap ripples and gathers, while anything longer or
+// further-traveling is a scroll and stays silent. Mouse keeps the full
+// press/hold/drag repertoire. Native scrolling is never prevented.
+let downAt = 0;
+let downPos = null;
+window.addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "touch") {
+    downAt = performance.now();
+    downPos = getMouseCanvasPos(canvas, e);
+    return;
+  }
+  pressHeld = true;
+  pressAt(e, true);
 });
+window.addEventListener("pointermove", (e) => {
+  if (pressHeld && e.pointerType !== "touch") pressAt(e, false);
+});
+window.addEventListener("pointerup", (e) => {
+  pressHeld = false;
+  if (e.pointerType !== "touch" || !downPos) return;
+  let p = getMouseCanvasPos(canvas, e);
+  let quick = performance.now() - downAt < 300;
+  let still = Math.hypot(p.x - downPos.x, p.y - downPos.y) < 12;
+  downPos = null;
+  if (quick && still) pressAt(e, true);
+});
+for (let evt of ["pointercancel", "pointerleave"]) {
+  window.addEventListener(evt, () => { pressHeld = false; downPos = null; });
+}
+// splash=true stamps one ripple + gather pulse; splash=false just steers
+// the gather point (drag movement), leaving ring creation to the
+// STREAK_MS metronome so motion can never flood the pond.
+function pressAt(e, splash) {
+  let p = getMouseCanvasPos(canvas, e);
+  if (FOLLOW_MOUSE) mouse = { x: p.x, y: p.y };
+  gatherPoint = { x: p.x, y: p.y };
+  gatherUntil = performance.now() + GATHER_MS;
+  if (!splash) return;
+  addRipple(p.x, p.y, 5);
+  spawnRipple(p.x, p.y, VISITOR_TINT, 1.35);
+}
 
 // function draw_line(pointA, pointB, width=2, color="#4caee8"){
 //     ctx.beginPath();
@@ -81,6 +161,8 @@ canvas.addEventListener("mousemove", e => {
 // }
 
 function makeChain(size, variety = 'sanke'){
+  // Scale the design size into the current viewport (see worldScale).
+  size = size * worldScale;
   // Fusiform (koi-torpedo) half-width profile: fine rounded snout,
   // deepest around the front third, long smooth taper to a narrow
   // caudal peduncle. Monotonic rise then fall, no bumps. Tail stock
@@ -175,8 +257,7 @@ function move_fish(x, y, chain){
 
 
 const BOID_SETTINGS = {
-  neighborDist: 200,   // How far a fish looks for friends
-  separationDist: 300,  // How much they hate being crowded
+  // Sense ranges scale with the viewport (see worldScale); weights stay put.
   maxSpeed: 0.2,
   maxForce: 0.1,
   wiggleForce: 0.05,       // How quickly they can turn
@@ -189,17 +270,15 @@ const BOID_SETTINGS = {
 };
 
 
-
-const MARGIN = 400; // Pixels from the edge where they start turning
-const TURN_STRENGTH = 0.8; // How hard they steer back
+const TURN_STRENGTH = 1.2; // How hard they steer back
 
 function getBoundarySteer(fish, width, height) {
     let steer = new vec2d(0, 0);
     const center = new vec2d(width / 2, height / 2);
 
     // If outside the margin, steer back to center
-    if (fish.head.x < MARGIN || fish.head.x > width - MARGIN || 
-        fish.head.y < MARGIN || fish.head.y > height - MARGIN) {
+    if (fish.head.x < BND_MARGIN || fish.head.x > width - BND_MARGIN ||
+        fish.head.y < BND_MARGIN || fish.head.y > height - BND_MARGIN) {
         
         // This vector points from the fish to the center of the screen
         steer = center.subtract(fish.head).unit().multiply(TURN_STRENGTH);
@@ -216,7 +295,7 @@ function applyBoids(fish, allFish, mousePos) {
 
     allFish.forEach(other => {
         let d = fish.head.subtract(other.head).magnitude();
-        if (d > 0 && d < BOID_SETTINGS.neighborDist) {
+        if (d > 0 && d < NEIGHBOR_DIST) {
             separation = separation.add(fish.head.subtract(other.head).unit().multiply(1 / d));
             alignment = alignment.add(other.direction);
             cohesion = cohesion.add(other.head);
@@ -233,7 +312,16 @@ function applyBoids(fish, allFish, mousePos) {
 
     // Add Boundary & Mouse
     steer = steer.add(getBoundarySteer(fish, canvas.width, canvas.height));
-    steer = steer.add(mousePos.subtract(fish.head).unit().multiply(BOID_SETTINGS.weights.mouse));
+    if (FOLLOW_MOUSE) {
+      steer = steer.add(mousePos.subtract(fish.head).unit().multiply(BOID_SETTINGS.weights.mouse));
+    }
+
+    // Press gathering: quadratic decay keeps the visit gentle.
+    let gatherLeft = (gatherUntil - performance.now()) / GATHER_MS;
+    if (gatherLeft > 0) {
+        let toGather = new vec2d(gatherPoint.x - fish.head.x, gatherPoint.y - fish.head.y).unit();
+        steer = steer.add(toGather.multiply(1.2 * gatherLeft * gatherLeft));
+    }
 
     // Re-applying the Sin Wave (The "Wiggle")
     // We add the wiggle to the current direction before applying steering
@@ -249,8 +337,8 @@ function applyBoids(fish, allFish, mousePos) {
         desiredDir = fish.direction.rotate(angle_between > 0 ? MAX_INTERNAL_ANGLE : -MAX_INTERNAL_ANGLE);
     }
 
-    // Randomized Speed (Original logic)
-    let move_speed = randint(2, 8);
+    // Randomized Speed (Original logic, scaled to the viewport)
+    let move_speed = randint(Math.max(1, Math.round(2 * worldScale)), Math.max(2, Math.round(8 * worldScale)));
     fish.head = fish.head.add(desiredDir.multiply(move_speed));
     fish.update();
 }
@@ -342,12 +430,34 @@ if (rigToggle) {
   });
 }
 
+// Zen toggle: hero, cards, and footer fade out, leaving pond, navbar,
+// and pills. Scrolling still grades the light underneath.
+const calmToggle = document.getElementById('calm-toggle');
+if (calmToggle) {
+  calmToggle.addEventListener('click', () => {
+    let zen = document.body.classList.toggle('zen');
+    calmToggle.setAttribute('aria-pressed', `${zen}`);
+    calmToggle.querySelector('.caption').textContent = zen ? 'bring it back' : 'still water';
+  });
+}
+
 let lastFrame = performance.now();
+let lastStreakAt = 0;
+const STREAK_MS = 500; // metronome for hold rings: slow enough to stay calm
 function animate() {
     let now = performance.now();
     let dt = Math.min(0.05, (now - lastFrame) / 1000); // clamped frame delta
     lastFrame = now;
     let t = now / 1000;
+
+    // Held press rings on a fixed metronome: regular in time, blind to
+    // movement, slow enough to stay calm. The gather pull stays topped
+    // up either way until release.
+    if (pressHeld && now - lastStreakAt > STREAK_MS) {
+        lastStreakAt = now;
+        gatherUntil = now + GATHER_MS;
+        spawnRipple(gatherPoint.x, gatherPoint.y, VISITOR_TINT, 1.2);
+    }
 
     drawPondBackground(t);
 
