@@ -224,23 +224,20 @@
             opacity: 0 !important;
             pointer-events: none !important;
         }
-        /* First-visit hint: teaches the press in one line, then leaves. */
+        /* First-visit hint: rides above the scroll cue as one unit, so the
+           two can never cover each other. Teaches the press in one line,
+           then leaves. */
         #press-hint {
-            position: fixed;
-            left: 50%;
-            bottom: calc(6.8rem + env(safe-area-inset-bottom));
-            transform: translateX(-50%) translateY(8px);
-            z-index: 10;
+            opacity: 0;
+            margin-bottom: 0.9rem;
             font-size: 0.78rem;
             letter-spacing: 0.18em;
             color: #eef6fb;
             text-shadow: 0 1px 12px rgba(10, 30, 46, 0.7);
-            opacity: 0;
             transition: opacity 0.8s ease;
-            pointer-events: none;
             white-space: nowrap;
         }
-        #press-hint.show { opacity: 0.9; transform: translateX(-50%) translateY(0); }
+        #press-hint.show { opacity: 0.9; }
         #press-hint.gone { opacity: 0 !important; }
         #fps {
             position: fixed;
@@ -263,7 +260,8 @@
             z-index: 1;
             text-align: center;
             color: #f3efe4;
-            padding: 0 1rem 4rem 1rem;
+            /* Clears the fixed pills so the sign-off never slides under. */
+            padding: 0 1rem calc(5rem + env(safe-area-inset-bottom)) 1rem;
             font-size: 0.8rem;
             letter-spacing: 0.2em;
             opacity: 0.75;
@@ -291,7 +289,7 @@ Your browser does not support the HTML canvas tag.
         <header class="hero" id="hero">
             <h1>Eric Deng</h1>
             <p>Welcome, come sit by the water.</p>
-            <div class="scroll-hint">SCROLL</div>
+            <div class="scroll-hint"><div id="press-hint">press the water, the koi will come</div>SCROLL</div>
         </header>
 
         <section class="card" id="about">
@@ -337,7 +335,6 @@ Your browser does not support the HTML canvas tag.
     <div id="fps">-- fps</div>
     -->
 
-    <div id="press-hint">press the water, the koi will come</div>
 
 <script type="module" src="main.js"></script>
 </body>

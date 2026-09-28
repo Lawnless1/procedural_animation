@@ -39,6 +39,11 @@ function computeWorldScale(){
 // Initialize all canvas modules, then fit the pond to the window:
 // landing-page full-bleed background. Mouse mapping already compensates
 // via bounding-rect scaling.
+// The pond always opens at the surface: disable scroll restoration so a
+// reload never lands mid-page with half-faded hero and night water.
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+window.scrollTo(0, 0);
+
 fitCanvas();
 window.addEventListener("resize", fitCanvas);
 
