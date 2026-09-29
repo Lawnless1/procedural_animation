@@ -157,6 +157,48 @@
         }
         section.card p { line-height: 1.6; margin: 0 0 0.7rem 0; }
         section.card a { color: var(--accent); }
+        /* Experience: blue monogram tile, role, company line. */
+        .xp { list-style: none; padding: 0; margin: 0; }
+        .xp li {
+            display: flex;
+            gap: 1.1rem;
+            align-items: flex-start;
+            padding: 1.1rem 0;
+            border-top: 1px solid rgba(20, 32, 46, 0.14);
+        }
+        .xp li:last-child { border-bottom: 1px solid rgba(20, 32, 46, 0.14); }
+        .xp .tile {
+            flex: 0 0 auto;
+            position: relative;
+            width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #1d4e79;
+            background: rgba(29, 78, 121, 0.10);
+            overflow: hidden;
+        }
+        /* Real logo badges over the blue monogram fallback: if a logo
+           fails to load it removes itself, revealing the letter. */
+        .xp .tile img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #fff;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        /* Wide-frame marks need a closer crop to read at tile size. */
+        .xp .tile img.zoom { transform: scale(1.6); }
+        .xp strong { display: block; font-weight: 600; }
+        .xp .meta { font-size: 0.95rem; opacity: 0.8; line-height: 1.6; }
 
         /* Small screens: tighter type, roomier touch, no overflow. */
         @media (max-width: 640px) {
@@ -276,6 +318,7 @@
 Your browser does not support the HTML canvas tag.
 </canvas>
 
+    <!-- Navbar, parked. Uncomment to restore.
     <nav>
         <a class="brand" href="#top">ERIC DENG</a>
         <div class="links">
@@ -285,6 +328,7 @@ Your browser does not support the HTML canvas tag.
         </div>
         <div id="progress"></div>
     </nav>
+    -->
 
     <main id="top">
         <header class="hero" id="hero">
@@ -312,6 +356,18 @@ Your browser does not support the HTML canvas tag.
             <p style="font-size: 0.85rem; opacity: 0.7;">Sparked by an
             <a href="https://www.youtube.com/watch?v=qlfh_rv6khY" target="_blank" rel="noopener">interesting video</a> I saw.</p>
         </section>
+
+<!-- Experience section, parked. Uncomment to restore.
+        <section class="card" id="experience">
+            <h2>EXPERIENCE</h2>
+            <ul class="xp">
+                <li><span class="tile">C<img src="logos/citadel.png" alt="Citadel logo" loading="lazy" onerror="this.remove()"></span><div><strong>Citadel</strong><div class="meta">Quantitative Developer Intern, Equities Engineering</div></div></li>
+                <li><span class="tile">S<img src="logos/squarepoint.png" alt="Squarepoint Capital logo" loading="lazy" onerror="this.remove()"></span><div><strong>Squarepoint Capital</strong><div class="meta">Quantitative Developer Intern, QD-Volatility</div></div></li>
+                <li><span class="tile">T<img src="logos/tower.webp" alt="Tower Research Capital logo" loading="lazy" onerror="this.remove()"></span><div><strong>Tower Research Capital</strong><div class="meta">Software Developer Intern, SEFO</div></div></li>
+                <li><span class="tile">E<img class="zoom" src="logos/ericsson.png" alt="Ericsson logo" loading="lazy" onerror="this.remove()"></span><div><strong>Ericsson</strong><div class="meta">Software Developer Intern, Cloud RAN</div></div></li>
+            </ul>
+        </section>
+    -->
 
         <section class="card" id="contact">
             <h2>CONTACT</h2>

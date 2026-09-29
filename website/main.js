@@ -141,15 +141,18 @@ function getMouseCanvasPos(canvas, evt) {
   };
 }
 let mouse = { x: 0, y: 0 };
+let mouseSeen = false;
 
 // Passive mouse-follow is OFF: the school wanders until invited by
 // press/tap. Flip FOLLOW_MOUSE to restore the old trailing cursor.
+// Position is always tracked so the ambient 5s ripple knows where you are.
+// Window-level: content overlays the canvas, so a canvas listener would
+// almost never fire.
 const FOLLOW_MOUSE = false;
-if (FOLLOW_MOUSE) {
-  canvas.addEventListener("mousemove", e => {
-    mouse = getMouseCanvasPos(canvas, e);
-  });
-}
+window.addEventListener("mousemove", e => {
+  mouse = getMouseCanvasPos(canvas, e);
+  mouseSeen = true;
+});
 
 // Press-to-gather: a press ripples the water and briefly biases the
 // whole school toward the press point. The pull decays quadratically
@@ -511,6 +514,8 @@ if (pressHint) {
 let lastFrame = performance.now();
 let lastStreakAt = 0;
 const STREAK_MS = 500; // metronome for hold rings: slow enough to stay calm
+const MOUSE_RIPPLE_MS = 5000; // ambient ripple breathing at the cursor
+let lastMouseRippleAt = 0;
 // Live FPS readout, refreshed twice a second so the DOM write itself
 // never becomes the thing being measured.
 const fpsEl = document.getElementById('fps');
@@ -535,6 +540,14 @@ function animate() {
         lastStreakAt = now;
         gatherUntil = now + GATHER_MS;
         spawnRipple(gatherPoint.x, gatherPoint.y, VISITOR_TINT, 1.2, 2.5);
+    }
+
+    // Ambient cursor ripple: every few seconds the water acknowledges
+    // where you are resting, fish-soft so it never reads as a press.
+    if (mouseSeen && now - lastMouseRippleAt > MOUSE_RIPPLE_MS) {
+        lastMouseRippleAt = now;
+        addRipple(mouse.x, mouse.y, 1.5);
+        spawnRipple(mouse.x, mouse.y);
     }
 
     drawPondBackground(t);
